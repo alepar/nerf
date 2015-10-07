@@ -1,0 +1,6 @@
+[submodule "libraries/Adafruit_INA219"]
+	path = libraries/Adafruit_INA219
+	url = https://github.com/adafruit/Adafruit_INA219.git
+[submodule "libraries/i2c_t3"]
+	path = libraries/i2c_t3
+	url = https://github.com/nox771/i2c_t3
