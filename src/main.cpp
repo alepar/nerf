@@ -13,6 +13,7 @@ extern "C" int main(void)
 	Serial.println("Hello, world!");
 
 	ina219.begin();
+	ina219.setCalibration_32V_20A();
 
 	while(1) {
 		float shuntvoltage = 0;

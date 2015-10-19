@@ -111,6 +111,7 @@ class Adafruit_INA219{
   void begin(void);
   void begin(uint8_t addr);
   void setCalibration_32V_2A(void);
+  void setCalibration_32V_20A(void);
   void setCalibration_32V_1A(void);
   void setCalibration_16V_400mA(void);
   float getBusVoltage_V(void);

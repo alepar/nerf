@@ -137,7 +137,81 @@ void Adafruit_INA219::setCalibration_32V_2A(void)
   ina219_currentDivider_mA = 10;  // Current LSB = 100uA per bit (1000/100 = 10)
   ina219_powerDivider_mW = 2;     // Power LSB = 1mW per bit (2/1)
 
-  // Set Calibration register to 'Cal' calculated above	
+  // Set Calibration register to 'Cal' calculated above 
+  wireWriteRegister(INA219_REG_CALIBRATION, ina219_calValue);
+  
+  // Set Config register to take into account the settings above
+  uint16_t config = INA219_CONFIG_BVOLTAGERANGE_32V |
+                    INA219_CONFIG_GAIN_8_320MV |
+                    INA219_CONFIG_BADCRES_12BIT |
+                    INA219_CONFIG_SADCRES_12BIT_1S_532US |
+                    INA219_CONFIG_MODE_SANDBVOLT_CONTINUOUS;
+  wireWriteRegister(INA219_REG_CONFIG, config);
+}
+
+void Adafruit_INA219::setCalibration_32V_20A(void)
+{
+  // VBUS_MAX = 32V             (Assumes 32V, can also be set to 16V)
+  // VSHUNT_MAX = 0.32          (Assumes Gain 8, 320mV, can also be 0.16, 0.08, 0.04)
+  // RSHUNT = 0.01               (Resistor value in ohms)
+  
+  // 1. Determine max possible current
+  // MaxPossible_I = VSHUNT_MAX / RSHUNT
+  // MaxPossible_I = 32A
+  
+  // 2. Determine max expected current
+  // MaxExpected_I = 20.0A
+  
+  // 3. Calculate possible range of LSBs (Min = 15-bit, Max = 12-bit)
+  // MinimumLSB = MaxExpected_I/32767
+  // MinimumLSB = 0.00061              (610uA per bit)
+  // MaximumLSB = MaxExpected_I/4096
+  // MaximumLSB = 0,00488              (4.88mA per bit)
+  
+  // 4. Choose an LSB between the min and max values
+  //    (Preferrably a roundish number close to MinLSB)
+  // CurrentLSB = 0.001 (1mA per bit)
+  
+  // 5. Compute the calibration register
+  // Cal = trunc (0.04096 / (Current_LSB * RSHUNT))
+  // Cal = 4096 (0x1000)
+  
+  ina219_calValue = 4096;
+  
+  // 6. Calculate the power LSB
+  // PowerLSB = 20 * CurrentLSB
+  // PowerLSB = 0.02 (20mW per bit)
+  
+  // 7. Compute the maximum current and shunt voltage values before overflow
+  //
+  // Max_Current = Current_LSB * 32767
+  // Max_Current = 32.767A before overflow
+  //
+  // If Max_Current > Max_Possible_I then
+  //    Max_Current_Before_Overflow = MaxPossible_I
+  // Else
+  //    Max_Current_Before_Overflow = Max_Current
+  // End If
+  //
+  // Max_ShuntVoltage = Max_Current_Before_Overflow * RSHUNT
+  // Max_ShuntVoltage = 0.32V
+  //
+  // If Max_ShuntVoltage >= VSHUNT_MAX
+  //    Max_ShuntVoltage_Before_Overflow = VSHUNT_MAX
+  // Else
+  //    Max_ShuntVoltage_Before_Overflow = Max_ShuntVoltage
+  // End If
+  
+  // 8. Compute the Maximum Power
+  // MaximumPower = Max_Current_Before_Overflow * VBUS_MAX
+  // MaximumPower = 32 * 32V
+  // MaximumPower = 1024W
+  
+  // Set multipliers to convert raw current/power values
+  ina219_currentDivider_mA = 1;  // Current LSB = 1mA per bit (1000/1000 = 1)
+  ina219_powerDivider_mW = 20;     // Power LSB = 20mW per bit (20/1)
+
+  // Set Calibration register to 'Cal' calculated above 
   wireWriteRegister(INA219_REG_CALIBRATION, ina219_calValue);
   
   // Set Config register to take into account the settings above
