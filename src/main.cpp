@@ -1,6 +1,5 @@
 #include "WProgram.h"
 
-#include "Snooze.h"
 #include "Adafruit_NeoPixel.h"
 
 #define PIN_LED_STATUS 			13
@@ -9,8 +8,10 @@
 #define NEOPIXEL_COUNT 			8
 #define NEOPIXEL_MODE 			NEO_GRB+NEO_KHZ800
 
-#define PIN_VOLTAGE_SENSOR		A0
-#define PIN_JUDGE_SENSOR        12
+#define PIN_JUDGE_SENSOR        22
+
+#define PIN_RELAY_ON 			20
+#define PIN_RELAY_OFF 			21
 
 const uint8_t GAMMAS[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
@@ -32,17 +33,16 @@ const uint8_t GAMMAS[] = {
 
 Adafruit_NeoPixel pixels = Adafruit_NeoPixel(NEOPIXEL_COUNT, PIN_LED_NEOPIXEL, NEOPIXEL_MODE);
 
-SnoozeBlock config;
-
 uint16_t curDispVal;
 uint32_t lastUpdateMillis;
+uint32_t lastWriteBucket = 0;
 
 void setPixelColor(uint16_t n, uint8_t r, uint8_t g, uint8_t b) {
     pixels.setPixelColor(n, GAMMAS[r], GAMMAS[g], GAMMAS[b]);
 }
 
-#define MAX_SPEED 2
-void recalcVal(uint16_t sensorVal) {
+#define MAX_SPEED 1
+void recalcVal(int16_t sensorVal) {
 	uint32_t curMillis = millis();
 	uint32_t delta = curMillis - lastUpdateMillis;
 
@@ -62,7 +62,9 @@ void recalcVal(uint16_t sensorVal) {
 	}
 }
 
-#define MAX_VOLT 277
+#define MIN_SENSOR 500  // 3.1v on 3s
+#define MAX_SENSOR 708  // 4.2v on 3s
+#define MAX_VOLT (MAX_SENSOR-MIN_SENSOR)
 #define VOLTS_PER_PIXEL (MAX_VOLT/NEOPIXEL_COUNT)
 void setVoltDisplay(uint32_t val) {
 	uint8_t i;
@@ -72,47 +74,50 @@ void setVoltDisplay(uint32_t val) {
 	}
 
 	setPixelColor(i, 255*(val%VOLTS_PER_PIXEL)/VOLTS_PER_PIXEL, 0, 0);
-	for (; i < NEOPIXEL_COUNT; i++) {
+	for (i++; i < NEOPIXEL_COUNT; i++) {
 		setPixelColor(i, 0, 0, 0);
 	}
 	pixels.show();
 }
 
 extern "C" int main(void) {
-	delay(100); // let it settle
+	delay(200); // let it settle
+
+	Serial.begin(115200);
 
 	pinMode(PIN_LED_STATUS, OUTPUT);
-	config.pinMode(PIN_JUDGE_SENSOR, INPUT_PULLUP, LOW); //pinMode(PIN_JUDGE_SENSOR, INPUT_PULLUP);
+    digitalWriteFast(PIN_LED_STATUS, HIGH);
+	
+	pinMode(PIN_JUDGE_SENSOR, INPUT);
+
+	pinMode(PIN_RELAY_OFF, OUTPUT);
+	digitalWrite(PIN_RELAY_OFF, 0);
+	pinMode(PIN_RELAY_ON, OUTPUT);
+	digitalWrite(PIN_RELAY_ON, 1);
 
 	pixels.begin(); pixels.show(); // clear pixels
 
 	curDispVal = 0;
 	lastUpdateMillis = millis();
 
-	//analogReadRes ?
-
 	while(1) {
-		Snooze.sleep(config);
-	    digitalWriteFast(PIN_LED_STATUS, HIGH);
-
-	    uint8_t judgePresent;
-		while((judgePresent = !digitalRead(PIN_JUDGE_SENSOR)) || curDispVal) {
-			int16_t dispVal = 0;
-			if (judgePresent) {
-				dispVal = analogRead(PIN_VOLTAGE_SENSOR) - 692;
-			}
-
-			if (dispVal < 0) dispVal = 0;
-			if (dispVal > 277) dispVal = 277;
-
-			recalcVal(dispVal);
-			setVoltDisplay(curDispVal);
-
-			Snooze.idle();
+		int16_t dispVal = analogRead(PIN_JUDGE_SENSOR) - MIN_SENSOR;
+		uint32_t curBucket = millis() / 500;
+		if (curBucket != lastWriteBucket) {
+			lastWriteBucket = curBucket;
+			Serial.println(analogRead(PIN_JUDGE_SENSOR));
 		}
 
-		digitalWriteFast(PIN_LED_STATUS, LOW);
+		if (dispVal < 0) dispVal = 0;
+		if (dispVal > MAX_VOLT) dispVal = MAX_VOLT;
+
+		recalcVal(dispVal);
+		setVoltDisplay(curDispVal);
+
+		if (!dispVal && !curDispVal) {
+			digitalWrite(PIN_RELAY_ON, 0);
+			digitalWrite(PIN_RELAY_OFF, 1);
+		}
 	}
 
 }
-
